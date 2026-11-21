@@ -604,7 +604,12 @@ void IPureServer::AndroidLanProcessPendingClients()
         std::snprintf(clientData.pass, sizeof(clientData.pass), "%s", entry.playerPassword.c_str());
         clientData.process_id = entry.peerAddress == "127.0.0.1" ? GetCurrentProcessId() : 0;
 
+        csMessage.Enter();
         IClient* client = new_client(&clientData);
+        if (client)
+            OnAndroidLanClientAccepted(client);
+        csMessage.Leave();
+
         if (!client)
         {
             entry.socket->Shutdown();
@@ -616,7 +621,6 @@ void IPureServer::AndroidLanProcessPendingClients()
             continue;
         }
 
-        OnAndroidLanClientAccepted(client);
         m_androidLanClientThreads.emplace_back(
             &IPureServer::AndroidLanClientLoop, this, entry.id, std::move(entry.socket));
 
