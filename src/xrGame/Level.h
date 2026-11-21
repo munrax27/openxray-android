@@ -279,6 +279,7 @@ public:
 
     // Starting/Loading
     bool net_Start(const char* op_server, const char* op_client) override;
+    bool net_StartLanCoop(const char* op_server);
     void net_Load(const char* name) override;
     void net_Save(const char* name) override;
     void net_Stop() override;
