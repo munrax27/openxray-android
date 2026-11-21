@@ -574,21 +574,37 @@ void IPureServer::AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::
 
     if (m_androidLanRunning.load())
     {
-        IClient* client = GetClientByID(id);
-        if (client)
         {
-            client->flags.bConnected = FALSE;
-            client->flags.bReconnect = FALSE;
-            OnCL_Disconnected(client);
-            client_Destroy(client);
+            std::lock_guard<std::mutex> guard(m_androidLanDisconnectMutex);
+            m_androidLanPendingDisconnects.push_back(id);
         }
-    }
 
-    {
         std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
         m_androidLanPeers.erase(id.value());
     }
 }
+
+void IPureServer::AndroidLanProcessDisconnects()
+{
+    std::vector<ClientID> pending;
+    {
+        std::lock_guard<std::mutex> guard(m_androidLanDisconnectMutex);
+        pending.swap(m_androidLanPendingDisconnects);
+    }
+
+    for (const ClientID& id : pending)
+    {
+        IClient* client = GetClientByID(id);
+        if (!client)
+            continue;
+
+        client->flags.bConnected = FALSE;
+        client->flags.bReconnect = FALSE;
+        OnCL_Disconnected(client);
+        client_Destroy(client);
+    }
+}
+
 #endif
 
 
