@@ -30,6 +30,7 @@ public:
     bool ListenIpv4(std::uint16_t port, int backlog = 4, std::string* error = nullptr);
     bool Accept(TcpSocket& client, std::string* peerAddress = nullptr,
         std::uint16_t* peerPort = nullptr, std::string* error = nullptr);
+    void Shutdown() noexcept;
 
     bool SendFrame(const void* data, std::size_t size, std::string* error = nullptr);
     bool ReceiveFrame(std::vector<std::uint8_t>& data,
