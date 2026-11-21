@@ -253,11 +253,6 @@ IPureServer::EConnect IPureServer::Connect(pcstr options, GameDescriptionData& g
 #endif
 
     // Parse options
-    string4096 session_name;
-    xr_strcpy(session_name, options);
-    if (std::strchr(session_name, '/'))
-        *std::strchr(session_name, '/') = 0;
-
     u32 dwMaxPlayers = 2;
     if (std::strstr(options, "maxplayers="))
     {
@@ -396,13 +391,20 @@ void IPureServer::Disconnect()
 
     {
         std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
+        std::lock_guard<std::mutex> disconnectGuard(m_androidLanDisconnectMutex);
         for (auto& entry : m_androidLanPeers)
         {
+            ClientID id;
+            id.set(entry.first);
+            m_androidLanPendingDisconnects.push_back(id);
+
             if (entry.second.socket)
                 entry.second.socket->Close();
         }
         m_androidLanPeers.clear();
     }
+
+    AndroidLanProcessDisconnects();
 #endif
 
     if (!psNET_direct_connect)
