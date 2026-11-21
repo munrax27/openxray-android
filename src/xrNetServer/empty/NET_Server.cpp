@@ -576,6 +576,54 @@ void IPureServer::AndroidLanAcceptLoop()
     }
 }
 
+void IPureServer::AndroidLanProcessPendingClients()
+{
+    std::vector<AndroidLanPendingClient> pending;
+    {
+        std::lock_guard<std::mutex> guard(m_androidLanPendingClientsMutex);
+        pending.swap(m_androidLanPendingClients);
+    }
+
+    for (AndroidLanPendingClient& entry : pending)
+    {
+        if (!m_androidLanRunning.load() || !entry.socket || !entry.socket->IsOpen())
+        {
+            if (entry.socket)
+                entry.socket->Shutdown();
+            {
+                std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
+                m_androidLanPeers.erase(entry.id.value());
+            }
+            m_androidLanReservedClientCount.fetch_sub(1);
+            continue;
+        }
+
+        SClientConnectData clientData;
+        clientData.clientID = entry.id;
+        std::snprintf(clientData.name, sizeof(clientData.name), "%s", entry.playerName.c_str());
+        std::snprintf(clientData.pass, sizeof(clientData.pass), "%s", entry.playerPassword.c_str());
+        clientData.process_id = entry.peerAddress == "127.0.0.1" ? GetCurrentProcessId() : 0;
+
+        IClient* client = new_client(&clientData);
+        if (!client)
+        {
+            entry.socket->Shutdown();
+            {
+                std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
+                m_androidLanPeers.erase(entry.id.value());
+            }
+            m_androidLanReservedClientCount.fetch_sub(1);
+            continue;
+        }
+
+        OnAndroidLanClientAccepted(client);
+        m_androidLanClientThreads.emplace_back(
+            &IPureServer::AndroidLanClientLoop, this, entry.id, std::move(entry.socket));
+
+        Msg("* Android LAN: client %u registered on game thread", entry.id.value());
+    }
+}
+
 void IPureServer::AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::TcpSocket> socket)
 {
     while (m_androidLanRunning.load() && socket && socket->IsOpen())
@@ -602,6 +650,7 @@ void IPureServer::AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::
 
         std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
         m_androidLanPeers.erase(id.value());
+        m_androidLanReservedClientCount.fetch_sub(1);
     }
 }
 
