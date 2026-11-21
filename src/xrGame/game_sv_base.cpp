@@ -773,6 +773,12 @@ void game_sv_GameState::OnEvent(NET_Packet& tNetPacket, u16 type, u32 time, Clie
 
 bool game_sv_GameState::CheckNewPlayer(xrClientData* CL)
 {
+    if (IsGameTypeSingle())
+    {
+        CheckPlayerName(CL);
+        return true;
+    }
+
     xrGameSpyServer* gs_server = smart_cast<xrGameSpyServer*>(m_server);
     R_ASSERT(gs_server);
 
