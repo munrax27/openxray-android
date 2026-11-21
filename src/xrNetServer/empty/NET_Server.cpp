@@ -258,7 +258,7 @@ IPureServer::EConnect IPureServer::Connect(pcstr options, GameDescriptionData& g
     if (std::strchr(session_name, '/'))
         *std::strchr(session_name, '/') = 0;
 
-    u32 dwMaxPlayers = 0;
+    u32 dwMaxPlayers = 2;
     if (std::strstr(options, "maxplayers="))
     {
         const char* value = std::strstr(options, "maxplayers=") + 11;
@@ -270,7 +270,26 @@ IPureServer::EConnect IPureServer::Connect(pcstr options, GameDescriptionData& g
         dwMaxPlayers = static_cast<u32>(std::strtoul(buffer, nullptr, 10));
     }
     if (dwMaxPlayers < 1 || dwMaxPlayers > 32)
-        dwMaxPlayers = 32;
+        dwMaxPlayers = 2;
+
+#if defined(__ANDROID__)
+    m_androidLanMaxPlayers = dwMaxPlayers;
+    m_androidLanGameFlags = 0;
+    if (std::strstr(options, "/single"))
+        m_androidLanGameFlags |= AndroidLan::GameFlagStory;
+    if (std::strstr(options, "/alife"))
+        m_androidLanGameFlags |= AndroidLan::GameFlagAlife;
+    m_androidLanPassword[0] = 0;
+    if (std::strstr(options, "psw="))
+    {
+        const char* value = std::strstr(options, "psw=") + 4;
+        const char* endValue = std::strchr(value, '/');
+        const std::size_t length = std::min<std::size_t>(
+            endValue ? static_cast<std::size_t>(endValue - value) : std::strlen(value),
+            sizeof(m_androidLanPassword) - 1);
+        std::memcpy(m_androidLanPassword, value, length);
+    }
+#endif
 #ifdef DEBUG
     Msg("MaxPlayers = %d", dwMaxPlayers);
 #endif
@@ -428,11 +447,42 @@ void IPureServer::AndroidLanAcceptLoop()
         AndroidLan::ClientHello hello{};
         std::memcpy(&hello, helloBytes.data(), sizeof(hello));
         hello.playerName[sizeof(hello.playerName) - 1] = 0;
-        hello.password[sizeof(hello.password) - 1] = 0;
+        hello.playerPassword[sizeof(hello.playerPassword) - 1] = 0;
+        hello.serverPassword[sizeof(hello.serverPassword) - 1] = 0;
 
         if (hello.magic != AndroidLan::ProtocolMagic || hello.version != AndroidLan::ProtocolVersion)
         {
+            AndroidLan::ServerHello rejection{};
+            rejection.magic = AndroidLan::ProtocolMagic;
+            rejection.version = AndroidLan::ProtocolVersion;
+            rejection.status = 1;
+            accepted.SendFrame(&rejection, sizeof(rejection), nullptr);
             Msg("! Android LAN: rejected client with unsupported protocol");
+            continue;
+        }
+
+        if (!m_androidLanRunning.load())
+            break;
+
+        if (m_androidLanPassword[0] && std::strcmp(hello.serverPassword, m_androidLanPassword) != 0)
+        {
+            AndroidLan::ServerHello rejection{};
+            rejection.magic = AndroidLan::ProtocolMagic;
+            rejection.version = AndroidLan::ProtocolVersion;
+            rejection.status = 2;
+            accepted.SendFrame(&rejection, sizeof(rejection), nullptr);
+            Msg("! Android LAN: rejected client with incorrect server password");
+            continue;
+        }
+
+        if (GetClientsCount() >= m_androidLanMaxPlayers)
+        {
+            AndroidLan::ServerHello rejection{};
+            rejection.magic = AndroidLan::ProtocolMagic;
+            rejection.version = AndroidLan::ProtocolVersion;
+            rejection.status = 3;
+            accepted.SendFrame(&rejection, sizeof(rejection), nullptr);
+            Msg("! Android LAN: rejected client because the session is full");
             continue;
         }
 
@@ -463,6 +513,7 @@ void IPureServer::AndroidLanAcceptLoop()
         reply.version = AndroidLan::ProtocolVersion;
         reply.status = 0;
         reply.clientId = clientIdValue;
+        reply.gameFlags = m_androidLanGameFlags;
         reply.game = m_androidLanGameDescription;
 
         if (!socket->SendFrame(&reply, sizeof(reply), &error))
@@ -486,7 +537,7 @@ void IPureServer::AndroidLanAcceptLoop()
         clientData.clientID = clientId;
         std::snprintf(clientData.name, sizeof(clientData.name), "%s",
             hello.playerName[0] ? hello.playerName : "Player");
-        std::snprintf(clientData.pass, sizeof(clientData.pass), "%s", hello.password);
+        std::snprintf(clientData.pass, sizeof(clientData.pass), "%s", hello.playerPassword);
         clientData.process_id = peerAddress == "127.0.0.1" ? GetCurrentProcessId() : 0;
 
         IClient* client = new_client(&clientData);
