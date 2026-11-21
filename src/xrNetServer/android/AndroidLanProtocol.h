@@ -7,7 +7,7 @@
 namespace AndroidLan
 {
 constexpr std::uint32_t ProtocolMagic = 0x584C414E; // "XLAN"
-constexpr std::uint16_t ProtocolVersion = 1;
+constexpr std::uint16_t ProtocolVersion = 2;
 constexpr std::uint32_t GameFlagStory = 1u << 0;
 constexpr std::uint32_t GameFlagAlife = 1u << 1;
 
