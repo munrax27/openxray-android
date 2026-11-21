@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 
+namespace ZoneProtocol
+{
 #pragma pack(push, 1)
 
 struct ZO_Header {
@@ -212,3 +214,4 @@ struct CharacterSelect {
 };
 
 #pragma pack(pop)
+} // namespace ZoneProtocol
