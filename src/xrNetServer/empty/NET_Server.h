@@ -172,8 +172,21 @@ protected:
     AndroidLan::TcpSocket m_androidLanListener;
     std::atomic<bool> m_androidLanRunning{false};
     std::thread m_androidLanAcceptThread;
+    struct AndroidLanPendingClient
+    {
+        ClientID id;
+        std::shared_ptr<AndroidLan::TcpSocket> socket;
+        std::string playerName;
+        std::string playerPassword;
+        std::string peerAddress;
+        u32 peerPort = 0;
+    };
+
     std::mutex m_androidLanPeersMutex;
     std::unordered_map<u32, AndroidLanPeer> m_androidLanPeers;
+    std::mutex m_androidLanPendingClientsMutex;
+    std::vector<AndroidLanPendingClient> m_androidLanPendingClients;
+    std::atomic<u32> m_androidLanReservedClientCount{0};
     std::mutex m_androidLanDisconnectMutex;
     std::vector<ClientID> m_androidLanPendingDisconnects;
     std::vector<std::thread> m_androidLanClientThreads;
@@ -185,7 +198,9 @@ protected:
 
     void AndroidLanAcceptLoop();
     void AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::TcpSocket> socket);
+    void AndroidLanProcessPendingClients();
     void AndroidLanProcessDisconnects();
+    virtual void OnAndroidLanClientAccepted(IClient* client) {}
 #endif
 
     int psNET_Port;
