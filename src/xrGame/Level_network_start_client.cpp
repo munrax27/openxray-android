@@ -15,7 +15,45 @@
 
 extern pureFrame* g_pNetProcessor;
 
-bool CLevel::net_Start_client(const char* options) { return false; }
+bool CLevel::net_Start_client(const char* options)
+{
+    ZoneScoped;
+
+    if (!options || !*options)
+        return false;
+
+    net_start_result_total = TRUE;
+    connected_to_server = FALSE;
+    m_caServerOptions = "";
+    g_pGamePersistent->LoadBegin();
+
+    string64 playerName;
+    GetPlayerName_FromRegistry(playerName, sizeof(playerName));
+    if (xr_strlen(playerName) == 0)
+        xr_strcpy(playerName, xr_strlen(Core.UserName) ? Core.UserName : Core.CompName);
+
+    if (!strstr(options, "/name="))
+    {
+        string512 clientOptions;
+        xr_strcpy(clientOptions, options);
+        xr_strcat(clientOptions, "/name=");
+        xr_strcat(clientOptions, playerName);
+        m_caClientOptions = clientOptions;
+    }
+    else
+    {
+        m_caClientOptions = options;
+    }
+
+    g_loading_events.push_back(LOADING_EVENT(this, &CLevel::net_start_client1));
+    g_loading_events.push_back(LOADING_EVENT(this, &CLevel::net_start_client2));
+    g_loading_events.push_back(LOADING_EVENT(this, &CLevel::net_start_client3));
+    g_loading_events.push_back(LOADING_EVENT(this, &CLevel::net_start_client4));
+    g_loading_events.push_back(LOADING_EVENT(this, &CLevel::net_start_client5));
+    g_loading_events.push_back(LOADING_EVENT(this, &CLevel::net_start_client6));
+
+    return net_start_result_total;
+}
 
 bool CLevel::net_start_client1()
 {
