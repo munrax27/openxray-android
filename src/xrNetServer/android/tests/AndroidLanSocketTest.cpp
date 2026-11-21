@@ -23,23 +23,24 @@ int main()
     }
 
     std::atomic<bool> serverSucceeded{false};
+    std::string serverError;
     std::thread serverThread([&]()
     {
         AndroidLan::TcpSocket peer;
-        if (!listener.Accept(peer, nullptr, nullptr, &error))
+        if (!listener.Accept(peer, nullptr, nullptr, &serverError))
             return;
 
         std::vector<std::uint8_t> received;
-        if (!peer.ReceiveFrame(received, AndroidLan::TcpSocket::DefaultMaxFrameSize, &error))
+        if (!peer.ReceiveFrame(received, AndroidLan::TcpSocket::DefaultMaxFrameSize, &serverError))
             return;
 
         if (received != payload)
         {
-            error = "server received a payload different from the sent payload";
+            serverError = "server received a payload different from the sent payload";
             return;
         }
 
-        if (!peer.SendFrame(received.data(), received.size(), &error))
+        if (!peer.SendFrame(received.data(), received.size(), &serverError))
             return;
 
         serverSucceeded.store(true);
@@ -64,7 +65,7 @@ int main()
 
     if (!received || echoed != payload || !serverSucceeded.load())
     {
-        std::cerr << "TCP frame round-trip failed: " << error << '\n';
+        std::cerr << "TCP frame round-trip failed: " << (error.empty() ? serverError : error) << '\n';
         return 1;
     }
 
