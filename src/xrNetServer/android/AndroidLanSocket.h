@@ -28,6 +28,7 @@ public:
 
     bool ConnectIpv4(const char* address, std::uint16_t port, std::string* error = nullptr);
     bool ListenIpv4(std::uint16_t port, int backlog = 4, std::string* error = nullptr);
+    bool SetReceiveTimeoutMs(int timeoutMs, std::string* error = nullptr);
     bool Accept(TcpSocket& client, std::string* peerAddress = nullptr,
         std::uint16_t* peerPort = nullptr, std::string* error = nullptr);
     void Shutdown() noexcept;
