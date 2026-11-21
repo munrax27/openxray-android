@@ -13,6 +13,10 @@ on:
       - ".github/workflows/android-apk.yml"
   workflow_dispatch:
 
+concurrency:
+  group: android-lan-coop-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
