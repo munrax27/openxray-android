@@ -711,7 +711,7 @@ void game_sv_GameState::OnEvent(NET_Packet& tNetPacket, u16 type, u32 time, Clie
 
         if (!e_src) // && !IsGameTypeSingle() added by andy because of Phantom does not have server entity
         {
-            if (IsGameTypeSingle())
+            if (IsGameTypeSingle() && psNET_direct_connect)
                 break;
 
             game_PlayerState* ps = get_eid(id_src);
