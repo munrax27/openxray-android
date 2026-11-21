@@ -207,6 +207,9 @@ public:
     void SendConfigFinished(ClientID const& clientId);
     void SendProfileCreationError(IClient* CL, char const* reason);
     void AttachNewClient(IClient* CL);
+#if defined(__ANDROID__)
+    void OnAndroidLanClientAccepted(IClient* client) override { AttachNewClient(client); }
+#endif
     virtual void OnBuildVersionRespond(IClient* CL, NET_Packet& P);
 
 protected:
