@@ -174,6 +174,8 @@ protected:
     std::thread m_androidLanAcceptThread;
     std::mutex m_androidLanPeersMutex;
     std::unordered_map<u32, AndroidLanPeer> m_androidLanPeers;
+    std::mutex m_androidLanDisconnectMutex;
+    std::vector<ClientID> m_androidLanPendingDisconnects;
     std::vector<std::thread> m_androidLanClientThreads;
     std::atomic<u32> m_androidLanNextClientId{2};
     GameDescriptionData m_androidLanGameDescription{};
@@ -183,6 +185,7 @@ protected:
 
     void AndroidLanAcceptLoop();
     void AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::TcpSocket> socket);
+    void AndroidLanProcessDisconnects();
 #endif
 
     int psNET_Port;
