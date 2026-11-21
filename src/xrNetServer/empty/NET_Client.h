@@ -87,6 +87,7 @@ protected:
     void AndroidLanReceiveLoop();
     xr_string m_androidLanServerAddress;
     u32 m_androidLanServerPort = 0;
+    u32 m_androidLanGameFlags = 0;
 #endif
 
     void SetClientID(ClientID const& local_client)
