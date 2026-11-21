@@ -196,6 +196,7 @@ void xrServer::Update()
     ZoneScoped;
 #if defined(__ANDROID__)
     AndroidLanProcessPendingClients();
+    AndroidLanProcessPendingPackets();
     AndroidLanProcessDisconnects();
 #endif
 
