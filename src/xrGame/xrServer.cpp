@@ -340,10 +340,13 @@ void xrServer::SendUpdatesToAll()
 {
     ZoneScoped;
 
-    if (IsGameTypeSingle())
+    if (IsGameTypeSingle() && !m_androidLanCoop)
         return;
 
-    KickCheaters();
+    // The story co-op host remains a single-player game type so ALife and
+    // story logic stay authoritative, but it still needs multiplayer updates.
+    if (!IsGameTypeSingle())
+        KickCheaters();
 
     // sending game_update
     fastdelegate::FastDelegate1<IClient*, void> sendtofd;
