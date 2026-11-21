@@ -58,3 +58,22 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
+  transport-smoke-test:
+    name: Test Android LAN TCP transport
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Compile TCP transport test
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pthread \
+            src/xrNetServer/android/AndroidLanSocket.cpp \
+            src/xrNetServer/android/tests/AndroidLanSocketTest.cpp \
+            -o android-lan-socket-test
+
+      - name: Run TCP frame round-trip test
+        run: ./android-lan-socket-test
