@@ -1,5 +1,13 @@
 add_library(xrNetServer)
 
+if (ANDROID)
+    target_sources(xrNetServer PRIVATE
+        android/AndroidLanSocket.cpp
+        android/AndroidLanSocket.h
+    )
+endif()
+
+
 target_sources(xrNetServer PRIVATE
     guids.cpp
     ip_filter.cpp
