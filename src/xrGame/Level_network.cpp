@@ -18,6 +18,9 @@
 #include "ui/UIPdaWnd.h"
 #include "xrNetServer/NET_AuthCheck.h"
 #include "xrNetServer/NET_Messages.h"
+#if defined(__ANDROID__)
+#include "xrNetServer/android/AndroidLanProtocol.h"
+#endif
 
 #include "xrPhysics/PhysicsCommon.h"
 #include "xrPhysics/PHCommander.h"
@@ -361,6 +364,22 @@ bool CLevel::Connect2Server(const char* options)
 
     if (!Connect(options))
         return FALSE;
+
+#if defined(__ANDROID__)
+    // The LAN hello arrives before this point. Apply the authoritative story
+    // game type before ClientReceive() can process M_SV_CONFIG_GAME and build
+    // the client-side game state/compression configuration.
+    if (m_androidLanGameFlags & AndroidLan::GameFlagStory)
+    {
+        xr_strcpy(g_pGamePersistent->m_game_params.m_game_type, "single");
+        if (m_androidLanGameFlags & AndroidLan::GameFlagAlife)
+            xr_strcpy(g_pGamePersistent->m_game_params.m_alife, "alife");
+        else
+            g_pGamePersistent->m_game_params.m_alife[0] = 0;
+        g_pGamePersistent->UpdateGameType();
+    }
+#endif
+
     //---------------------------------------------------------------------------
     if (psNET_direct_connect)
         m_bConnectResultReceived = true;
