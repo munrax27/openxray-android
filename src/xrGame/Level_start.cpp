@@ -26,15 +26,48 @@ bool CLevel::net_StartLanCoop(const char* op_server)
     if (!op_server || !*op_server)
         return false;
 
+    const char* optionsStart = strchr(op_server, '/');
+    const size_t mapNameLength = optionsStart ? static_cast<size_t>(optionsStart - op_server) : xr_strlen(op_server);
+    if (mapNameLength == 0 || mapNameLength >= 256)
+    {
+        Msg("! LAN co-op: invalid level name");
+        return false;
+    }
+
+    // xrServer::Connect expects the game type as the first option:
+    // map/single/alife/coop. Normalize user input such as map/alife.
     string1024 options;
     xr_strcpy(options, op_server);
-    if (!strstr(options, "/single"))
-        xr_strcat(options, "/single");
-    if (!strstr(options, "/coop"))
-        xr_strcat(options, "/coop");
+    if (strchr(options, '/'))
+        *strchr(options, '/') = 0;
+    xr_strcat(options, "/single");
+
+    if (optionsStart && *optionsStart)
+    {
+        string1024 extraOptions;
+        xr_strcpy(extraOptions, optionsStart + 1);
+        char* token = extraOptions;
+        while (token && *token)
+        {
+            char* next = strchr(token, '/');
+            if (next)
+                *next = 0;
+
+            if (token[0] && xr_strcmp(token, "single") && xr_strcmp(token, "coop"))
+            {
+                xr_strcat(options, "/");
+                xr_strcat(options, token);
+            }
+
+            token = next ? next + 1 : nullptr;
+        }
+    }
+
+    xr_strcat(options, "/coop");
     if (!strstr(options, "maxplayers="))
         xr_strcat(options, "/maxplayers=2");
 
+    Msg("* LAN co-op: normalized server options: %s", options);
     return net_Start(options, "localhost");
 }
 
