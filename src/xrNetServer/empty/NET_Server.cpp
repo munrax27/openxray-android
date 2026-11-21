@@ -384,6 +384,16 @@ void IPureServer::Disconnect()
 
     m_androidLanListener.Close();
 
+    {
+        std::lock_guard<std::mutex> guard(m_androidLanPendingClientsMutex);
+        for (AndroidLanPendingClient& pending : m_androidLanPendingClients)
+        {
+            if (pending.socket)
+                pending.socket->Shutdown();
+        }
+        m_androidLanPendingClients.clear();
+    }
+
     for (std::thread& thread : m_androidLanClientThreads)
     {
         if (thread.joinable() && thread.get_id() != std::this_thread::get_id())
@@ -406,6 +416,7 @@ void IPureServer::Disconnect()
         m_androidLanPeers.clear();
     }
 
+    m_androidLanReservedClientCount.store(0);
     AndroidLanProcessDisconnects();
 #endif
 
@@ -479,8 +490,10 @@ void IPureServer::AndroidLanAcceptLoop()
             continue;
         }
 
-        if (GetClientsCount() >= m_androidLanMaxPlayers)
+        const u32 reservedBefore = m_androidLanReservedClientCount.fetch_add(1);
+        if (reservedBefore >= m_androidLanMaxPlayers)
         {
+            m_androidLanReservedClientCount.fetch_sub(1);
             AndroidLan::ServerHello rejection{};
             rejection.magic = AndroidLan::ProtocolMagic;
             rejection.version = AndroidLan::ProtocolVersion;
@@ -493,6 +506,7 @@ void IPureServer::AndroidLanAcceptLoop()
         const u32 clientIdValue = m_androidLanNextClientId.fetch_add(1);
         if (clientIdValue < 2 || clientIdValue == 0xffffffff)
         {
+            m_androidLanReservedClientCount.fetch_sub(1);
             Msg("! Android LAN: client ID space exhausted");
             continue;
         }
@@ -523,8 +537,12 @@ void IPureServer::AndroidLanAcceptLoop()
         if (!socket->SendFrame(&reply, sizeof(reply), &error))
         {
             Msg("! Android LAN: server hello send failed: %s", error.c_str());
-            std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
-            m_androidLanPeers.erase(clientIdValue);
+            socket->Close();
+            {
+                std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
+                m_androidLanPeers.erase(clientIdValue);
+            }
+            m_androidLanReservedClientCount.fetch_sub(1);
             continue;
         }
 
@@ -532,30 +550,29 @@ void IPureServer::AndroidLanAcceptLoop()
         {
             Msg("! Android LAN: could not clear handshake timeout: %s", error.c_str());
             socket->Shutdown();
-            std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
-            m_androidLanPeers.erase(clientIdValue);
+            {
+                std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
+                m_androidLanPeers.erase(clientIdValue);
+            }
+            m_androidLanReservedClientCount.fetch_sub(1);
             continue;
         }
 
-        SClientConnectData clientData;
-        clientData.clientID = clientId;
-        std::snprintf(clientData.name, sizeof(clientData.name), "%s",
-            hello.playerName[0] ? hello.playerName : "Player");
-        std::snprintf(clientData.pass, sizeof(clientData.pass), "%s", hello.playerPassword);
-        clientData.process_id = peerAddress == "127.0.0.1" ? GetCurrentProcessId() : 0;
+        AndroidLanPendingClient pending;
+        pending.id = clientId;
+        pending.socket = std::move(socket);
+        pending.playerName = hello.playerName[0] ? hello.playerName : "Player";
+        pending.playerPassword = hello.playerPassword;
+        pending.peerAddress = peerAddress;
+        pending.peerPort = peerPort;
 
-        IClient* client = new_client(&clientData);
-        if (!client)
         {
-            socket->Shutdown();
-            std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
-            m_androidLanPeers.erase(clientIdValue);
-            continue;
+            std::lock_guard<std::mutex> guard(m_androidLanPendingClientsMutex);
+            m_androidLanPendingClients.push_back(std::move(pending));
         }
 
-        Msg("* Android LAN: client %u connected from %s:%u", clientIdValue, peerAddress.c_str(), peerPort);
-        m_androidLanClientThreads.emplace_back(
-            &IPureServer::AndroidLanClientLoop, this, clientId, std::move(socket));
+        Msg("* Android LAN: handshake accepted from %s:%u; waiting for game-thread registration",
+            peerAddress.c_str(), peerPort);
     }
 }
 
