@@ -6,6 +6,7 @@
 #include "../android/AndroidLanProtocol.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 #endif
@@ -277,6 +278,14 @@ bool IPureClient::Connect(pcstr options)
     R_ASSERT(options);
     Disconnect();
 
+    if (psNET_direct_connect)
+    {
+        net_Disconnected = false;
+        net_Connected = EnmConnectionCompleted;
+        net_Syncronised = true;
+        return true;
+    }
+
     char serverName[256]{};
     const char* slash = std::strchr(options, '/');
     const std::size_t hostLength = slash ? static_cast<std::size_t>(slash - options) : std::strlen(options);
@@ -289,6 +298,15 @@ bool IPureClient::Connect(pcstr options)
 
     char playerName[64]{};
     std::snprintf(playerName, sizeof(playerName), "%s", psNET_Name);
+    const char* nameValue = std::strstr(options, "name=");
+    if (nameValue)
+    {
+        nameValue += 5;
+        const char* endValue = std::strchr(nameValue, '/');
+        const std::size_t length = std::min<std::size_t>(
+            endValue ? static_cast<std::size_t>(endValue - nameValue) : std::strlen(nameValue), sizeof(playerName) - 1);
+        std::memcpy(playerName, nameValue, length);
+    }
 
     char password[64]{};
     const char* passValue = std::strstr(options, "pass=");
@@ -557,7 +575,6 @@ bool IPureClient::Connect(pcstr options)
     // Sync
     net_TimeDelta = 0;
     return true;
-}
 #endif
 }
 
