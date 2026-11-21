@@ -7,6 +7,12 @@
 #include "xrCommon/xr_vector.h"
 #include "xrCore/xrstring.h"
 
+#if defined(__ANDROID__)
+#include "../android/AndroidLanSocket.h"
+#include <atomic>
+#include <thread>
+#endif
+
 struct ip_address;
 
 class XRNETSERVER_API INetQueue : Noncopyable {
@@ -73,6 +79,15 @@ protected:
 
     void Sync_Thread();
     void Sync_Average();
+
+#if defined(__ANDROID__)
+    AndroidLan::TcpSocket m_androidLanSocket;
+    std::atomic<bool> m_androidLanRunning{false};
+    std::thread m_androidLanReceiveThread;
+    void AndroidLanReceiveLoop();
+    xr_string m_androidLanServerAddress;
+    u32 m_androidLanServerPort = 0;
+#endif
 
     void SetClientID(ClientID const& local_client)
     {
