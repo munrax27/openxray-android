@@ -1,11 +1,9 @@
 #pragma once
 
 #include "../NET_Common.h"
-#include "../../../third_party/zone/packets.h"
+#include "../../../third_party/zone/packet_validation.h"
 
-#include <cstddef>
 #include <cstdint>
-#include <cstring>
 
 namespace AndroidLan
 {
@@ -27,27 +25,15 @@ using EntityEnterAoI = ZoneProtocol::EntityEnterAoI;
 using EntityLeaveAoI = ZoneProtocol::EntityLeaveAoI;
 using DamageNotify = ZoneProtocol::DamageNotify;
 
-constexpr std::uint16_t PacketMagic = 0x5A4F;
-constexpr std::uint8_t PacketVersion = 1;
-
 static_assert(sizeof(Header) == 12, "Zone packet header layout changed");
 static_assert(sizeof(ClientTransform) == 29, "Zone transform layout changed");
 static_assert(sizeof(SnapshotEntry) == 22, "Zone snapshot entry layout changed");
 static_assert(sizeof(EntityEnterAoI) == 132, "Zone entity-enter layout changed");
 
-// Validates a complete Zone-format datagram/frame before any payload is read.
-// This helper is a protocol adapter only; it does not switch the active X-Ray
-// client/server traffic away from the existing Android LAN transport.
+// Adapter naming keeps game code independent from the upstream namespace.
 inline bool IsValidPacket(const void* data, std::size_t size) noexcept
 {
-    if (!data || size < sizeof(Header))
-        return false;
-
-    Header header{};
-    std::memcpy(&header, data, sizeof(header));
-    return header.magic == PacketMagic &&
-        header.protocol == PacketVersion &&
-        header.payload_len == size - sizeof(Header);
+    return ZoneProtocol::IsValidPacket(data, size);
 }
 } // namespace ZoneCompat
 
