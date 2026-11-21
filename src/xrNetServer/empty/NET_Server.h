@@ -181,11 +181,19 @@ protected:
         std::string peerAddress;
         u32 peerPort = 0;
     };
+    struct AndroidLanPendingPacket
+    {
+        ClientID id;
+        std::vector<std::uint8_t> data;
+    };
 
     std::mutex m_androidLanPeersMutex;
     std::unordered_map<u32, AndroidLanPeer> m_androidLanPeers;
     std::mutex m_androidLanPendingClientsMutex;
     std::vector<AndroidLanPendingClient> m_androidLanPendingClients;
+    std::mutex m_androidLanPendingPacketsMutex;
+    std::vector<AndroidLanPendingPacket> m_androidLanPendingPackets;
+    std::size_t m_androidLanPendingPacketBytes = 0;
     std::atomic<u32> m_androidLanReservedClientCount{0};
     std::mutex m_androidLanDisconnectMutex;
     std::vector<ClientID> m_androidLanPendingDisconnects;
@@ -199,6 +207,7 @@ protected:
     void AndroidLanAcceptLoop();
     void AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::TcpSocket> socket);
     void AndroidLanProcessPendingClients();
+    void AndroidLanProcessPendingPackets();
     void AndroidLanProcessDisconnects();
     virtual void OnAndroidLanClientAccepted(IClient* client) {}
 #endif
