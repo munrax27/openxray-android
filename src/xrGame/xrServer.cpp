@@ -320,6 +320,10 @@ void xrServer::MakeUpdatePackets()
 
 void xrServer::SendUpdatePacketsToAll()
 {
+    IClient* serverClient = GetServerClient();
+    if (!serverClient)
+        return; // The local host client may still be completing its LAN handshake.
+
     m_last_updates_size = 0;
     for (update_iterator_t i = m_update_begin; i != m_update_end; ++i)
     {
@@ -327,7 +331,7 @@ void xrServer::SendUpdatePacketsToAll()
         if (to_send.B.count > 2)
         {
             m_last_updates_size += to_send.B.count;
-            SendBroadcast(GetServerClient()->ID, to_send, net_flags(FALSE, TRUE));
+            SendBroadcast(serverClient->ID, to_send, net_flags(FALSE, TRUE));
             if (Level().IsDemoSave())
             {
                 Level().SavePacket(to_send);
