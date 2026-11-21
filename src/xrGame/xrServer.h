@@ -168,6 +168,7 @@ private:
         void FrameEnd() { Update.FrameEnd(); }
     };
     ServerStatistics stats;
+    bool m_androidLanCoop = false;
 
 protected:
     game_sv_GameState* game;
