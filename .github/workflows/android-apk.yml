@@ -81,3 +81,12 @@ jobs:
 
       - name: Run TCP frame round-trip test
         run: ./android-lan-socket-test
+
+      - name: Compile Zone packet compatibility test
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -I. \
+            src/xrNetServer/android/tests/ZoneProtocolTest.cpp \
+            -o zone-protocol-test
+
+      - name: Run Zone packet compatibility test
+        run: ./zone-protocol-test
