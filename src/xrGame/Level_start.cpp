@@ -21,6 +21,23 @@ shared_str CLevel::OpenDemoFile(const char* demo_file_name)
     return m_demo_server_options;
 }
 void CLevel::net_StartPlayDemo() { net_Start(m_demo_server_options.c_str(), "localhost"); }
+bool CLevel::net_StartLanCoop(const char* op_server)
+{
+    if (!op_server || !*op_server)
+        return false;
+
+    string1024 options;
+    xr_strcpy(options, op_server);
+    if (!strstr(options, "/single"))
+        xr_strcat(options, "/single");
+    if (!strstr(options, "/coop"))
+        xr_strcat(options, "/coop");
+    if (!strstr(options, "maxplayers="))
+        xr_strcat(options, "/maxplayers=2");
+
+    return net_Start(options, "localhost");
+}
+
 bool CLevel::net_Start(const char* op_server, const char* op_client)
 {
     ZoneScoped;
@@ -70,6 +87,16 @@ bool CLevel::net_Start(const char* op_server, const char* op_client)
         };
     };
     m_caServerOptions = op_server;
+
+    if (strstr(m_caServerOptions.c_str(), "/coop"))
+    {
+        xr_strcpy(g_pGamePersistent->m_game_params.m_game_type, "single");
+        if (strstr(m_caServerOptions.c_str(), "/alife"))
+            xr_strcpy(g_pGamePersistent->m_game_params.m_alife, "alife");
+        else
+            g_pGamePersistent->m_game_params.m_alife[0] = 0;
+        g_pGamePersistent->UpdateGameType();
+    }
     //---------------------------------------------------------------------
     if (!IsDemoPlay())
     {
