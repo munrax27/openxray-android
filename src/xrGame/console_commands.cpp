@@ -155,7 +155,7 @@ public:
     {
         if (!args || !*args)
         {
-            Msg("Usage: lan_coop_join <host_ipv4>[/port=5445][/pass=password]");
+            Msg("Usage: lan_coop_join <host_ipv4>[/port=NUMBER][/psw=password]");
             return;
         }
 
