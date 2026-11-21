@@ -194,6 +194,9 @@ bool g_sv_SendUpdate = false;
 void xrServer::Update()
 {
     ZoneScoped;
+#if defined(__ANDROID__)
+    AndroidLanProcessDisconnects();
+#endif
 
     if (Level().IsDemoPlayStarted() || Level().IsDemoPlayFinished())
         return; // diabling server when demo is playing
