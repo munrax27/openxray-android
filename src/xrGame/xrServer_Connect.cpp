@@ -35,6 +35,7 @@ LPCSTR xrServer::get_map_download_url(LPCSTR level_name, LPCSTR level_version)
 
 xrServer::EConnect xrServer::Connect(shared_str& session_name, GameDescriptionData& game_descr)
 {
+    m_androidLanCoop = std::strstr(session_name.c_str(), "/coop") != nullptr;
 #ifdef DEBUG
     Msg("* sv_Connect: %s", session_name.c_str());
 #endif
