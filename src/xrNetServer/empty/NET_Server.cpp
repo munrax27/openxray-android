@@ -594,14 +594,16 @@ void IPureServer::AndroidLanProcessDisconnects()
 
     for (const ClientID& id : pending)
     {
+        csMessage.Enter();
         IClient* client = GetClientByID(id);
-        if (!client)
-            continue;
-
-        client->flags.bConnected = FALSE;
-        client->flags.bReconnect = FALSE;
-        OnCL_Disconnected(client);
-        client_Destroy(client);
+        if (client)
+        {
+            client->flags.bConnected = FALSE;
+            client->flags.bReconnect = FALSE;
+            OnCL_Disconnected(client);
+            client_Destroy(client);
+        }
+        csMessage.Leave();
     }
 }
 
