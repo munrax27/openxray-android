@@ -852,7 +852,7 @@ void xrServer::Server_Client_Check(IClient* CL)
 
 bool xrServer::OnCL_QueryHost()
 {
-    if (game->Type() == eGameIDSingle)
+    if (game->Type() == eGameIDSingle && !m_androidLanCoop)
         return false;
     return (GetClientsCount() != 0);
 };
