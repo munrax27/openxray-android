@@ -8,6 +8,7 @@
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <limits>
@@ -153,6 +154,33 @@ bool TcpSocket::ListenIpv4(std::uint16_t port, int backlog, std::string* error)
     }
 
     m_fd = fd;
+    return true;
+}
+
+bool TcpSocket::SetReceiveTimeoutMs(int timeoutMs, std::string* error)
+{
+    if (m_fd == -1)
+    {
+        if (error)
+            *error = "socket is closed";
+        return false;
+    }
+
+    if (timeoutMs < 0)
+    {
+        if (error)
+            *error = "timeout must not be negative";
+        return false;
+    }
+
+    timeval timeout{};
+    timeout.tv_sec = timeoutMs / 1000;
+    timeout.tv_usec = (timeoutMs % 1000) * 1000;
+    if (setsockopt(m_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
+    {
+        SetError(error, "setsockopt(SO_RCVTIMEO)", errno);
+        return false;
+    }
     return true;
 }
 
