@@ -6,7 +6,7 @@ This feature is being developed on the `feature/android-lan-coop` branch.
 
 Both Android devices must be connected to the same Wi-Fi network and use the same game build and compatible game data.
 
-On the host device, open the in-game developer console and run:
+On the host device, open the in-game developer console and run. The command normalizes the supplied map options into the engine's `map/single/alife/coop` order:
 
 ```text
 lan_coop_host l01_escape/alife
