@@ -5,6 +5,16 @@
 #include "../NET_Shared.h"
 #include "../ip_filter.h"
 
+#if defined(__ANDROID__)
+#include "../android/AndroidLanSocket.h"
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+#include <vector>
+#endif
+
 struct SClientConnectData {
     ClientID clientID;
     string64 name;
@@ -150,6 +160,26 @@ protected:
     // xr_vector<IClient*>	net_Players;
     // xr_vector<IClient*>	net_Players_disconnected;
     IClient* SV_Client;
+
+#if defined(__ANDROID__)
+    struct AndroidLanPeer
+    {
+        std::shared_ptr<AndroidLan::TcpSocket> socket;
+        ip_address address;
+        u32 port = 0;
+    };
+
+    AndroidLan::TcpSocket m_androidLanListener;
+    std::atomic<bool> m_androidLanRunning{false};
+    std::thread m_androidLanAcceptThread;
+    std::mutex m_androidLanPeersMutex;
+    std::unordered_map<u32, AndroidLanPeer> m_androidLanPeers;
+    std::vector<std::thread> m_androidLanClientThreads;
+    std::atomic<u32> m_androidLanNextClientId{2};
+
+    void AndroidLanAcceptLoop();
+    void AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::TcpSocket> socket);
+#endif
 
     int psNET_Port;
 
