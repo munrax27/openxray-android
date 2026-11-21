@@ -308,14 +308,28 @@ bool IPureClient::Connect(pcstr options)
         std::memcpy(playerName, nameValue, length);
     }
 
-    char password[64]{};
+    char playerPassword[64]{};
     const char* passValue = std::strstr(options, "pass=");
     if (passValue)
     {
         passValue += 5;
         const char* endValue = std::strchr(passValue, '/');
-        const std::size_t length = std::min<std::size_t>(endValue ? endValue - passValue : std::strlen(passValue), sizeof(password) - 1);
-        std::memcpy(password, passValue, length);
+        const std::size_t length = std::min<std::size_t>(
+            endValue ? static_cast<std::size_t>(endValue - passValue) : std::strlen(passValue),
+            sizeof(playerPassword) - 1);
+        std::memcpy(playerPassword, passValue, length);
+    }
+
+    char serverPassword[64]{};
+    const char* serverPasswordValue = std::strstr(options, "psw=");
+    if (serverPasswordValue)
+    {
+        serverPasswordValue += 4;
+        const char* endValue = std::strchr(serverPasswordValue, '/');
+        const std::size_t length = std::min<std::size_t>(
+            endValue ? static_cast<std::size_t>(endValue - serverPasswordValue) : std::strlen(serverPasswordValue),
+            sizeof(serverPassword) - 1);
+        std::memcpy(serverPassword, serverPasswordValue, length);
     }
 
     u32 port = START_PORT_LAN_SV;
@@ -349,7 +363,8 @@ bool IPureClient::Connect(pcstr options)
     hello.magic = AndroidLan::ProtocolMagic;
     hello.version = AndroidLan::ProtocolVersion;
     std::snprintf(hello.playerName, sizeof(hello.playerName), "%s", playerName);
-    std::snprintf(hello.password, sizeof(hello.password), "%s", password);
+    std::snprintf(hello.playerPassword, sizeof(hello.playerPassword), "%s", playerPassword);
+    std::snprintf(hello.serverPassword, sizeof(hello.serverPassword), "%s", serverPassword);
 
     if (!m_androidLanSocket.SendFrame(&hello, sizeof(hello), &error))
     {
@@ -358,6 +373,15 @@ bool IPureClient::Connect(pcstr options)
         net_Connected = EnmConnectionFails;
         net_Disconnected = true;
         OnInvalidHost();
+        return false;
+    }
+
+    if (!m_androidLanSocket.SetReceiveTimeoutMs(5000, &error))
+    {
+        Msg("! Android LAN: could not set handshake timeout: %s", error.c_str());
+        m_androidLanSocket.Close();
+        net_Connected = EnmConnectionFails;
+        net_Disconnected = true;
         return false;
     }
 
@@ -373,15 +397,22 @@ bool IPureClient::Connect(pcstr options)
         return false;
     }
 
+    m_androidLanSocket.SetReceiveTimeoutMs(0, nullptr);
+
     AndroidLan::ServerHello reply{};
     std::memcpy(&reply, replyBytes.data(), sizeof(reply));
     if (reply.magic != AndroidLan::ProtocolMagic || reply.version != AndroidLan::ProtocolVersion || reply.status != 0 || reply.clientId == 0)
     {
-        Msg("! Android LAN: server rejected or sent an unsupported handshake");
+        Msg("! Android LAN: server rejected or sent an unsupported handshake (status %u)", reply.status);
         m_androidLanSocket.Close();
         net_Connected = EnmConnectionFails;
         net_Disconnected = true;
-        OnInvalidHost();
+        if (reply.status == 2)
+            OnInvalidPassword();
+        else if (reply.status == 3)
+            OnSessionFull();
+        else
+            OnInvalidHost();
         return false;
     }
 
