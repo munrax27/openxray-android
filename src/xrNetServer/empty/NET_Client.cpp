@@ -417,6 +417,7 @@ bool IPureClient::Connect(pcstr options)
     }
 
     m_game_description = reply.game;
+    m_androidLanGameFlags = reply.gameFlags;
     ClientID localClientId;
     localClientId.set(reply.clientId);
     SetClientID(localClientId);
