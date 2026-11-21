@@ -416,6 +416,12 @@ void IPureServer::Disconnect()
         m_androidLanPeers.clear();
     }
 
+    {
+        std::lock_guard<std::mutex> guard(m_androidLanPendingPacketsMutex);
+        m_androidLanPendingPackets.clear();
+        m_androidLanPendingPacketBytes = 0;
+    }
+
     m_androidLanReservedClientCount.store(0);
     AndroidLanProcessDisconnects();
 #endif
@@ -642,7 +648,33 @@ void IPureServer::AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::
         }
 
         if (!frame.empty())
-            RecievePacket(frame.data(), static_cast<u32>(frame.size()), id.value());
+        {
+            bool queueOverflow = false;
+            {
+                std::lock_guard<std::mutex> guard(m_androidLanPendingPacketsMutex);
+                constexpr std::size_t maxQueuedPackets = 128;
+                constexpr std::size_t maxQueuedBytes = 8 * 1024 * 1024;
+                if (m_androidLanPendingPackets.size() >= maxQueuedPackets ||
+                    frame.size() > maxQueuedBytes - m_androidLanPendingPacketBytes)
+                {
+                    queueOverflow = true;
+                }
+                else
+                {
+                    AndroidLanPendingPacket pending;
+                    pending.id = id;
+                    pending.data = std::move(frame);
+                    m_androidLanPendingPacketBytes += pending.data.size();
+                    m_androidLanPendingPackets.push_back(std::move(pending));
+                }
+            }
+
+            if (queueOverflow)
+            {
+                Msg("! Android LAN: packet queue overflow for client %u", id.value());
+                break;
+            }
+        }
     }
 
     if (m_androidLanRunning.load())
@@ -655,6 +687,22 @@ void IPureServer::AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::
         std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
         m_androidLanPeers.erase(id.value());
         m_androidLanReservedClientCount.fetch_sub(1);
+    }
+}
+
+void IPureServer::AndroidLanProcessPendingPackets()
+{
+    std::vector<AndroidLanPendingPacket> pending;
+    {
+        std::lock_guard<std::mutex> guard(m_androidLanPendingPacketsMutex);
+        pending.swap(m_androidLanPendingPackets);
+        m_androidLanPendingPacketBytes = 0;
+    }
+
+    for (AndroidLanPendingPacket& entry : pending)
+    {
+        if (!entry.data.empty())
+            RecievePacket(entry.data.data(), static_cast<u32>(entry.data.size()), entry.id.value());
     }
 }
 
