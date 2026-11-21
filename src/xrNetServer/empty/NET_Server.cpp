@@ -6,11 +6,13 @@
 #include "xrCore/buffer_vector.h"
 #include "xrGameSpy/xrGameSpy_MainDefs.h"
 
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
+
 #if defined(__ANDROID__)
 #include "../android/AndroidLanProtocol.h"
-#include <algorithm>
 #include <cstdio>
-#include <cstring>
 #include <utility>
 #include <vector>
 #endif
