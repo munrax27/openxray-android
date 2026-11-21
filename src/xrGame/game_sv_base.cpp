@@ -249,7 +249,10 @@ struct player_exporter
     void count_players(IClient* client)
     {
         xrClientData* tmp_client = static_cast<xrClientData*>(client);
-        if (!tmp_client->net_Ready || (tmp_client->ps->IsSkip() && tmp_client->ID != to_client))
+        // LAN co-op clients are registered before their profile/player-state
+        // packet is processed. Do not dereference ps until that event arrives.
+        if (!tmp_client || !tmp_client->net_Ready || !tmp_client->ps ||
+            (tmp_client->ps->IsSkip() && tmp_client->ID != to_client))
         {
             return;
         }
@@ -258,7 +261,10 @@ struct player_exporter
     void export_players(IClient* client)
     {
         xrClientData* tmp_client = static_cast<xrClientData*>(client);
-        if (!tmp_client->net_Ready || (tmp_client->ps->IsSkip() && tmp_client->ID != to_client))
+        // Keep the export pass consistent with count_players: a newly accepted
+        // client may briefly have no player state while its profile is queued.
+        if (!tmp_client || !tmp_client->net_Ready || !tmp_client->ps ||
+            (tmp_client->ps->IsSkip() && tmp_client->ID != to_client))
         {
             return;
         }
