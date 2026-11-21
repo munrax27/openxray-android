@@ -118,6 +118,59 @@ int g_first_person_death = 0;
 int g_normalize_mouse_sens = 0;
 int g_normalize_upgrade_mouse_sens = 0;
 
+#if defined(__ANDROID__)
+class CCC_LanCoopHost final : public IConsole_Command
+{
+public:
+    explicit CCC_LanCoopHost(pcstr name) : IConsole_Command(name) {}
+
+    void Execute(pcstr args) override
+    {
+        if (!args || !*args)
+        {
+            Msg("Usage: lan_coop_host <level_options> (example: l01_escape/alife)");
+            return;
+        }
+
+        if (!g_pGameLevel)
+        {
+            Msg("! LAN co-op: game level is not ready");
+            return;
+        }
+
+        Msg("* LAN co-op: starting host with options '%s'", args);
+        Level().net_StartLanCoop(args);
+    }
+};
+
+class CCC_LanCoopJoin final : public IConsole_Command
+{
+public:
+    explicit CCC_LanCoopJoin(pcstr name) : IConsole_Command(name)
+    {
+        bEmptyArgsHandled = false;
+    }
+
+    void Execute(pcstr args) override
+    {
+        if (!args || !*args)
+        {
+            Msg("Usage: lan_coop_join <host_ipv4>[/port=5445][/pass=password]");
+            return;
+        }
+
+        if (!g_pGameLevel)
+        {
+            Msg("! LAN co-op: game level is not ready");
+            return;
+        }
+
+        Msg("* LAN co-op: joining host '%s'", args);
+        Level().net_Start_client(args);
+    }
+};
+#endif
+
 void register_mp_console_commands();
 //-----------------------------------------------------------
 
@@ -2197,6 +2250,11 @@ public:
 void CCC_RegisterCommands()
 {
     ZoneScoped;
+
+#if defined(__ANDROID__)
+    CMD1(CCC_LanCoopHost, "lan_coop_host");
+    CMD1(CCC_LanCoopJoin, "lan_coop_join");
+#endif
 
     // options
     g_OptConCom.Init();
