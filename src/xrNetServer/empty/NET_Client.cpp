@@ -2,6 +2,13 @@
 #include "NET_Common.h"
 #include "NET_Log.h"
 #include "NET_Messages.h"
+#if defined(__ANDROID__)
+#include "../android/AndroidLanProtocol.h"
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <vector>
+#endif
 #include "NET_Server.h"
 #include "stdafx.h"
 #include "xrCore/Threading/Lock.hpp"
@@ -255,6 +262,9 @@ IPureClient::IPureClient(CTimer* timer)
 
 IPureClient::~IPureClient()
 {
+#if defined(__ANDROID__)
+    Disconnect();
+#endif
     xr_delete(pClNetLog);
     pClNetLog = nullptr;
     psNET_direct_connect = false;
@@ -263,6 +273,124 @@ IPureClient::~IPureClient()
 
 bool IPureClient::Connect(pcstr options)
 {
+#if defined(__ANDROID__)
+    R_ASSERT(options);
+    Disconnect();
+
+    char serverName[256]{};
+    const char* slash = std::strchr(options, '/');
+    const std::size_t hostLength = slash ? static_cast<std::size_t>(slash - options) : std::strlen(options);
+    if (hostLength == 0 || hostLength >= sizeof(serverName))
+    {
+        Msg("! Android LAN: invalid server address in options");
+        return false;
+    }
+    std::memcpy(serverName, options, hostLength);
+
+    char playerName[64]{};
+    std::snprintf(playerName, sizeof(playerName), "%s", psNET_Name);
+
+    char password[64]{};
+    const char* passValue = std::strstr(options, "pass=");
+    if (passValue)
+    {
+        passValue += 5;
+        const char* endValue = std::strchr(passValue, '/');
+        const std::size_t length = std::min<std::size_t>(endValue ? endValue - passValue : std::strlen(passValue), sizeof(password) - 1);
+        std::memcpy(password, passValue, length);
+    }
+
+    u32 port = START_PORT_LAN_SV;
+    const char* portValue = std::strstr(options, "port=");
+    if (portValue)
+    {
+        portValue += 5;
+        const unsigned long parsedPort = std::strtoul(portValue, nullptr, 10);
+        if (parsedPort == 0 || parsedPort > 65535)
+        {
+            Msg("! Android LAN: invalid server port");
+            return false;
+        }
+        port = static_cast<u32>(parsedPort);
+    }
+
+    if (xr_stricmp(serverName, "localhost") == 0)
+        std::snprintf(serverName, sizeof(serverName), "%s", "127.0.0.1");
+
+    std::string error;
+    if (!m_androidLanSocket.ConnectIpv4(serverName, static_cast<std::uint16_t>(port), &error))
+    {
+        Msg("! Android LAN: connection to %s:%u failed: %s", serverName, port, error.c_str());
+        net_Connected = EnmConnectionFails;
+        net_Disconnected = true;
+        OnInvalidHost();
+        return false;
+    }
+
+    AndroidLan::ClientHello hello{};
+    hello.magic = AndroidLan::ProtocolMagic;
+    hello.version = AndroidLan::ProtocolVersion;
+    std::snprintf(hello.playerName, sizeof(hello.playerName), "%s", playerName);
+    std::snprintf(hello.password, sizeof(hello.password), "%s", password);
+
+    if (!m_androidLanSocket.SendFrame(&hello, sizeof(hello), &error))
+    {
+        Msg("! Android LAN: hello send failed: %s", error.c_str());
+        m_androidLanSocket.Close();
+        net_Connected = EnmConnectionFails;
+        net_Disconnected = true;
+        OnInvalidHost();
+        return false;
+    }
+
+    std::vector<std::uint8_t> replyBytes;
+    if (!m_androidLanSocket.ReceiveFrame(replyBytes, sizeof(AndroidLan::ServerHello), &error) ||
+        replyBytes.size() != sizeof(AndroidLan::ServerHello))
+    {
+        Msg("! Android LAN: invalid server handshake: %s", error.c_str());
+        m_androidLanSocket.Close();
+        net_Connected = EnmConnectionFails;
+        net_Disconnected = true;
+        OnInvalidHost();
+        return false;
+    }
+
+    AndroidLan::ServerHello reply{};
+    std::memcpy(&reply, replyBytes.data(), sizeof(reply));
+    if (reply.magic != AndroidLan::ProtocolMagic || reply.version != AndroidLan::ProtocolVersion || reply.status != 0 || reply.clientId == 0)
+    {
+        Msg("! Android LAN: server rejected or sent an unsupported handshake");
+        m_androidLanSocket.Close();
+        net_Connected = EnmConnectionFails;
+        net_Disconnected = true;
+        OnInvalidHost();
+        return false;
+    }
+
+    m_game_description = reply.game;
+    ClientID localClientId;
+    localClientId.set(reply.clientId);
+    SetClientID(localClientId);
+    m_androidLanServerAddress = serverName;
+    m_androidLanServerPort = port;
+
+    net_csEnumeration->Enter();
+    net_Hosts.clear();
+    HOST_NODE node;
+    node.dpSessionName = serverName;
+    net_Hosts.push_back(std::move(node));
+    net_csEnumeration->Leave();
+
+    net_Connected = EnmConnectionWait;
+    net_Syncronised = false;
+    net_Disconnected = false;
+    m_androidLanRunning.store(true);
+    m_androidLanReceiveThread = std::thread(&IPureClient::AndroidLanReceiveLoop, this);
+
+    Msg("* Android LAN: connected to %s:%u as client %u", serverName, port, reply.clientId);
+    return true;
+#else
+
     R_ASSERT(options);
     net_Disconnected = false;
 
@@ -430,9 +558,27 @@ bool IPureClient::Connect(pcstr options)
     net_TimeDelta = 0;
     return true;
 }
+#endif
+}
 
 void IPureClient::Disconnect()
 {
+#if defined(__ANDROID__)
+    net_Disconnected = true;
+    m_androidLanRunning.store(false);
+    m_androidLanSocket.Shutdown();
+    if (m_androidLanReceiveThread.joinable() && m_androidLanReceiveThread.get_id() != std::this_thread::get_id())
+        m_androidLanReceiveThread.join();
+    m_androidLanSocket.Close();
+
+    net_csEnumeration->Enter();
+    net_Hosts.clear();
+    net_csEnumeration->Leave();
+
+    net_Connected = EnmConnectionWait;
+    net_Syncronised = false;
+#else
+
     // Clean up Host _list_
     net_csEnumeration->Enter();
 
@@ -449,6 +595,34 @@ void IPureClient::Disconnect()
     net_Connected = EnmConnectionWait;
     net_Syncronised = false;
 }
+#endif
+}
+
+#if defined(__ANDROID__)
+void IPureClient::AndroidLanReceiveLoop()
+{
+    while (m_androidLanRunning.load())
+    {
+        std::vector<std::uint8_t> frame;
+        std::string error;
+        if (!m_androidLanSocket.ReceiveFrame(frame, AndroidLan::TcpSocket::DefaultMaxFrameSize, &error))
+        {
+            if (m_androidLanRunning.load())
+                Msg("! Android LAN: receive stopped: %s", error.c_str());
+            break;
+        }
+
+        if (!frame.empty())
+            RecievePacket(frame.data(), static_cast<u32>(frame.size()));
+    }
+
+    if (m_androidLanRunning.exchange(false))
+    {
+        net_Disconnected = true;
+        net_Connected = EnmConnectionFails;
+    }
+}
+#endif
 
 HRESULT IPureClient::net_Handler(u32 dwMessageType, PVOID pMessage)
 {
@@ -484,7 +658,8 @@ void IPureClient::SendTo_LL(void* data, u32 size, u32 dwFlags, u32 dwTimeout)
     if (net_Disconnected)
         return;
 
-    if (psNET_Flags.test(NETFLAG_LOG_CL_PACKETS)) {
+    if (psNET_Flags.test(NETFLAG_LOG_CL_PACKETS))
+    {
         if (!pClNetLog)
             pClNetLog = xr_new<INetLog>("logs" DELIMITER "net_cl_log.log", timeServer());
         if (pClNetLog)
@@ -493,9 +668,17 @@ void IPureClient::SendTo_LL(void* data, u32 size, u32 dwFlags, u32 dwTimeout)
 
     net_Statistic.dwBytesSended += size;
 
+#if defined(__ANDROID__)
+    std::string error;
+    if (!m_androidLanSocket.SendFrame(data, size, &error))
+    {
+        Msg("! Android LAN: send failed: %s", error.c_str());
+        net_Disconnected = true;
+        net_Connected = EnmConnectionFails;
+    }
+#else
     // verify
-
-    //	Msg("- Client::SendTo_LL [%d]", size);
+#endif
 }
 
 void IPureClient::Send(NET_Packet& packet, u32 dwFlags, u32 dwTimeout)
@@ -559,12 +742,19 @@ void IPureClient::Sync_Average() {}
 
 void IPureClient::net_Syncronize()
 {
+#if defined(__ANDROID__)
+    // The LAN transport currently relies on the game-state time values sent
+    // with normal updates; no DirectPlay clock negotiation is required here.
+    net_TimeDelta = 0;
+    net_Syncronised = true;
+#else
     net_Syncronised = false;
     net_DeltaArray.clear();
     Threading::SpawnThread("network-time-sync", [this]
     {
         Sync_Thread();
     });
+#endif
 }
 
 bool IPureClient::net_isDisconnected() const
@@ -601,5 +791,14 @@ IPureClient::HOST_NODE::~HOST_NODE() noexcept
 
 bool IPureClient::GetServerAddress(ip_address& pAddress, u32* pPort)
 {
+#if defined(__ANDROID__)
+    if (m_androidLanServerAddress.empty())
+        return false;
+    pAddress.set(m_androidLanServerAddress.c_str());
+    if (pPort)
+        *pPort = m_androidLanServerPort;
     return true;
+#else
+    return true;
+#endif
 };
