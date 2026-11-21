@@ -367,7 +367,7 @@ void IPureServer::Disconnect()
 {
 #if defined(__ANDROID__)
     m_androidLanRunning.store(false);
-    m_androidLanListener.Close();
+    m_androidLanListener.Shutdown();
 
     {
         std::lock_guard<std::mutex> guard(m_androidLanPeersMutex);
@@ -381,6 +381,8 @@ void IPureServer::Disconnect()
     if (m_androidLanAcceptThread.joinable() &&
         m_androidLanAcceptThread.get_id() != std::this_thread::get_id())
         m_androidLanAcceptThread.join();
+
+    m_androidLanListener.Close();
 
     for (std::thread& thread : m_androidLanClientThreads)
     {
