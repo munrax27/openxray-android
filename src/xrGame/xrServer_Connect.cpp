@@ -36,6 +36,16 @@ LPCSTR xrServer::get_map_download_url(LPCSTR level_name, LPCSTR level_version)
 xrServer::EConnect xrServer::Connect(shared_str& session_name, GameDescriptionData& game_descr)
 {
     m_androidLanCoop = strstr(session_name.c_str(), "/coop") != nullptr;
+#if defined(__ANDROID__)
+    if (m_androidLanCoop)
+    {
+        // The Android story host keeps eGameIDSingle for ALife/story logic.
+        // The single-player compressor constructor therefore skips allocating
+        // PPMD/LZO state. Keep story co-op update packets uncompressed.
+        g_sv_traffic_optimization_level.set(eto_ppmd_compression, FALSE);
+        g_sv_traffic_optimization_level.set(eto_lzo_compression, FALSE);
+    }
+#endif
 #ifdef DEBUG
     Msg("* sv_Connect: %s", session_name.c_str());
 #endif
