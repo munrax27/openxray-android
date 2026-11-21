@@ -9,9 +9,6 @@
 #include "file_transfer.h"
 #include "HUDManager.h"
 #include "xrNetServer/NET_Messages.h"
-#if defined(__ANDROID__)
-#include "xrNetServer/android/AndroidLanProtocol.h"
-#endif
 
 #include "xrPhysics/IPHWorld.h"
 #include "physics_game.h"
@@ -101,18 +98,6 @@ bool CLevel::net_start_client2()
     }
 
     connected_to_server = Connect2Server(m_caClientOptions.c_str());
-
-#if defined(__ANDROID__)
-    if (connected_to_server && (m_androidLanGameFlags & AndroidLan::GameFlagStory))
-    {
-        xr_strcpy(g_pGamePersistent->m_game_params.m_game_type, "single");
-        if (m_androidLanGameFlags & AndroidLan::GameFlagAlife)
-            xr_strcpy(g_pGamePersistent->m_game_params.m_alife, "alife");
-        else
-            g_pGamePersistent->m_game_params.m_alife[0] = 0;
-        g_pGamePersistent->UpdateGameType();
-    }
-#endif
 
     return true;
 }
