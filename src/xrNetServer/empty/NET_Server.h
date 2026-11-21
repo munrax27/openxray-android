@@ -177,6 +177,9 @@ protected:
     std::vector<std::thread> m_androidLanClientThreads;
     std::atomic<u32> m_androidLanNextClientId{2};
     GameDescriptionData m_androidLanGameDescription{};
+    string64 m_androidLanPassword = "";
+    u32 m_androidLanGameFlags = 0;
+    u32 m_androidLanMaxPlayers = 2;
 
     void AndroidLanAcceptLoop();
     void AndroidLanClientLoop(ClientID id, std::shared_ptr<AndroidLan::TcpSocket> socket);
