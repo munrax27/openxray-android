@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -165,6 +166,32 @@ bool TcpSocket::Accept(TcpSocket& client, std::string* peerAddress,
         return false;
     }
 
+    pollfd listener{};
+    listener.fd = m_fd;
+    listener.events = POLLIN;
+
+    int ready;
+    do
+    {
+        ready = poll(&listener, 1, 100);
+    } while (ready == -1 && errno == EINTR);
+
+    if (ready == 0)
+        return false;
+
+    if (ready == -1)
+    {
+        SetError(error, "poll(listener)", errno);
+        return false;
+    }
+
+    if (listener.revents & (POLLERR | POLLHUP | POLLNVAL))
+    {
+        if (error)
+            *error = "listener socket is no longer available";
+        return false;
+    }
+
     sockaddr_in peer{};
     socklen_t peerSize = sizeof(peer);
     int accepted;
@@ -175,6 +202,8 @@ bool TcpSocket::Accept(TcpSocket& client, std::string* peerAddress,
 
     if (accepted == -1)
     {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return false;
         SetError(error, "accept", errno);
         return false;
     }
@@ -302,11 +331,19 @@ int TcpSocket::NativeHandle() const noexcept
     return m_fd;
 }
 
-void TcpSocket::Close() noexcept
+void TcpSocket::Shutdown() noexcept
 {
     if (m_fd != -1)
     {
         shutdown(m_fd, SHUT_RDWR);
+    }
+}
+
+void TcpSocket::Close() noexcept
+{
+    if (m_fd != -1)
+    {
+        Shutdown();
         close(m_fd);
         m_fd = -1;
     }
